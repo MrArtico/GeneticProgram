@@ -582,7 +582,7 @@ class IndividuoPG:
         if tipo == 'constante':
             return {
                 'tipo': 'folha',
-                'valor': random.uniform(-5, 5)  # VALOR ALEATÓRIO PARA O ALUNO MODIFICAR
+                'valor': random.uniform(-1, 1)  # VALOR ALEATÓRIO PARA O ALUNO MODIFICAR
             }
         else:
             return {
@@ -644,7 +644,7 @@ class IndividuoPG:
         if random.random() < probabilidade:
             if no['tipo'] == 'folha':
                 if 'valor' in no:
-                    no['valor'] = random.uniform(-5, 5)  # VALOR ALEATÓRIO PARA O ALUNO MODIFICAR
+                    no['valor'] = random.uniform(0, 10)  # VALOR ALEATÓRIO PARA O ALUNO MODIFICAR
                 elif 'variavel' in no:
                     no['variavel'] = random.choice(['dist_recurso', 'dist_obstaculo', 'dist_meta', 'angulo_recurso', 'angulo_meta', 'energia', 'velocidade', 'meta_atingida'])
             else:
@@ -663,10 +663,17 @@ class IndividuoPG:
     
     def crossover_no(self, no1, no2):
         # PROBABILIDADE DE CROSSOVER PARA O ALUNO MODIFICAR
-        if random.random() < 0.5:
+        if random.random() < 0.2:
             return no1.copy()
+        elif no1['tipo'] == 'folha' or no2['tipo'] == 'folha':
+            return random.choice([no1, no2]).copy()
         else:
-            return no2.copy()
+            return {
+                'tipo': 'operador',
+                'operador': no1['operador'],
+                'esquerda': self.crossover_no(no1['esquerda'], no2['esquerda']),
+                'direita': self.crossover_no(no1['direita'], no2['direita']) if no1['direita'] and no2['direita'] else None
+            }
     
     def salvar(self, arquivo):
         with open(arquivo, 'w') as f:
@@ -727,16 +734,19 @@ class ProgramacaoGenetica:
                 
                 # Calcular fitness
                 fitness_tentativa = (
-                    robo.recursos_coletados * 100 +  # Pontos por recursos coletados
-                    robo.distancia_percorrida * 0.1 -  # Pontos por distância percorrida
-                    robo.colisoes * 50 -  # Penalidade por colisões
-                    (100 - robo.energia) * 0.5  # Penalidade por consumo de energia
+                    (robo.recursos_coletados * robo.energia * 10)+  # Pontos por recursos coletados
+                    robo.distancia_percorrida * 15 -  # Pontos por distância percorrida
+                    robo.colisoes * 2  # Penalidade por colisões
+                    # (100 - robo.energia) * 0.4  # Penalidade por consumo de energia
                 )
                 
                 # Adicionar pontos extras por atingir a meta
-                if robo.meta_atingida:
-                    fitness_tentativa += 500  # Pontos extras por atingir a meta
-                
+                if robo.meta_atingida and len(ambiente.recursos) == 0:
+                    fitness_tentativa += 1000 # Pontos extras por atingir a meta
+            
+
+                # fitness_tentativa -= robo.tempo_parado * 2 # Penalidade por tempo parado
+
                 fitness += max(0, fitness_tentativa)
             
             individuo.fitness = fitness / 5  # Média das 5 tentativas
@@ -749,7 +759,7 @@ class ProgramacaoGenetica:
     def selecionar(self):
         # MÉTODO DE SELEÇÃO PARA O ALUNO MODIFICAR
         # Seleção por torneio
-        tamanho_torneio = 3  # TAMANHO DO TORNEIO PARA O ALUNO MODIFICAR
+        tamanho_torneio = 10  # TAMANHO DO TORNEIO PARA O ALUNO MODIFICAR
         selecionados = []
         
         for _ in range(self.tamanho_populacao):
@@ -784,7 +794,7 @@ class ProgramacaoGenetica:
             while len(nova_populacao) < self.tamanho_populacao:
                 pai1, pai2 = random.sample(selecionados, 2)
                 filho = pai1.crossover(pai2)
-                filho.mutacao(probabilidade=0.1)  # PROBABILIDADE DE MUTAÇÃO PARA O ALUNO MODIFICAR
+                filho.mutacao(probabilidade=0.6)  # PROBABILIDADE DE MUTAÇÃO PARA O ALUNO MODIFICAR
                 nova_populacao.append(filho)
             
             self.populacao = nova_populacao
@@ -803,8 +813,8 @@ if __name__ == "__main__":
     # Criar e treinar o algoritmo genético
     print("Treinando o algoritmo genético...")
     # PARÂMETROS PARA O ALUNO MODIFICAR
-    pg = ProgramacaoGenetica(tamanho_populacao=20, profundidade=4)
-    melhor_individuo, historico = pg.evoluir(n_geracoes=5)
+    pg = ProgramacaoGenetica(tamanho_populacao=100, profundidade=7)
+    melhor_individuo, historico = pg.evoluir(n_geracoes=8)
     
     # Salvar o melhor indivíduo
     print("Salvando o melhor indivíduo...")
