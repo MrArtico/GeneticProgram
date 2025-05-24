@@ -546,35 +546,17 @@ class IndividuoPG:
             return self.criar_folha()
         
         # OPERADORES DISPONÍVEIS PARA O ALUNO MODIFICAR
-        operador = random.choice(['+', '-', '*', '/', 'max', 'min', 'abs', 'if_positivo', 'if_negativo'])
-        if operador in ['+', '-', '*', '/']:
-            return {
-                'tipo': 'operador',
-                'operador': operador,
-                'esquerda': IndividuoPG(self.profundidade - 1).arvore_aceleracao,
-                'direita': IndividuoPG(self.profundidade - 1).arvore_aceleracao
-            }
-        elif operador in ['max', 'min']:
-            return {
-                'tipo': 'operador',
-                'operador': operador,
-                'esquerda': IndividuoPG(self.profundidade - 1).arvore_aceleracao,
-                'direita': IndividuoPG(self.profundidade - 1).arvore_aceleracao
-            }
-        elif operador == 'abs':
-            return {
-                'tipo': 'operador',
-                'operador': operador,
-                'esquerda': IndividuoPG(self.profundidade - 1).arvore_aceleracao,
-                'direita': None
-            }
-        else:  # if_positivo ou if_negativo
-            return {
-                'tipo': 'operador',
-                'operador': operador,
-                'esquerda': IndividuoPG(self.profundidade - 1).arvore_aceleracao,
-                'direita': IndividuoPG(self.profundidade - 1).arvore_aceleracao
-            }
+        operador = random.choice(['+', '-', '*', '/', 'if_positivo', 'if_negativo'])
+
+        esquerda = IndividuoPG(self.profundidade - 1).criar_arvore_aleatoria()
+        direita = IndividuoPG(self.profundidade - 1).criar_arvore_aleatoria()
+
+        return {
+            'tipo': 'operador',
+            'operador': operador,
+            'esquerda': esquerda,
+            'direita': direita
+        }
     
     def criar_folha(self):
         # VARIÁVEIS DISPONÍVEIS PARA O ALUNO MODIFICAR
@@ -582,7 +564,7 @@ class IndividuoPG:
         if tipo == 'constante':
             return {
                 'tipo': 'folha',
-                'valor': random.uniform(-1, 1)  # VALOR ALEATÓRIO PARA O ALUNO MODIFICAR
+                'valor': random.uniform(-3, 3)  # VALOR ALEATÓRIO PARA O ALUNO MODIFICAR
             }
         else:
             return {
@@ -644,11 +626,11 @@ class IndividuoPG:
         if random.random() < probabilidade:
             if no['tipo'] == 'folha':
                 if 'valor' in no:
-                    no['valor'] = random.uniform(0, 10)  # VALOR ALEATÓRIO PARA O ALUNO MODIFICAR
+                    no['valor'] = random.uniform(-3, 3)  # VALOR ALEATÓRIO PARA O ALUNO MODIFICAR
                 elif 'variavel' in no:
                     no['variavel'] = random.choice(['dist_recurso', 'dist_obstaculo', 'dist_meta', 'angulo_recurso', 'angulo_meta', 'energia', 'velocidade', 'meta_atingida'])
             else:
-                no['operador'] = random.choice(['+', '-', '*', '/', 'max', 'min', 'abs', 'if_positivo', 'if_negativo'])
+                no['operador'] = random.choice(['+', '-', '*', '/', 'max', 'min', 'abs', 'if_positivo', 'if_negativo', 'sin', 'cos', 'log'])
         
         if no['tipo'] == 'operador':
             self.mutacao_no(no['esquerda'], probabilidade)
@@ -662,15 +644,15 @@ class IndividuoPG:
         return novo
     
     def crossover_no(self, no1, no2):
-        # PROBABILIDADE DE CROSSOVER PARA O ALUNO MODIFICAR
-        if random.random() < 0.2:
-            return no1.copy()
+        if random.random() < 0.6:  # Aumenta a chance de trocar subárvores
+        # Trocar as subárvores completamente
+            return random.choice([no1, no2]).copy()
         elif no1['tipo'] == 'folha' or no2['tipo'] == 'folha':
             return random.choice([no1, no2]).copy()
         else:
             return {
                 'tipo': 'operador',
-                'operador': no1['operador'],
+                'operador': random.choice([no1['operador'], no2['operador']]),
                 'esquerda': self.crossover_no(no1['esquerda'], no2['esquerda']),
                 'direita': self.crossover_no(no1['direita'], no2['direita']) if no1['direita'] and no2['direita'] else None
             }
@@ -707,9 +689,10 @@ class ProgramacaoGenetica:
         
         for individuo in self.populacao:
             fitness = 0
+            tentativas = 10
             
             # Simular 5 tentativas
-            for _ in range(5):
+            for _ in range(tentativas):
                 ambiente.reset()
                 robo.reset(ambiente.largura // 2, ambiente.altura // 2)
                 
@@ -734,22 +717,21 @@ class ProgramacaoGenetica:
                 
                 # Calcular fitness
                 fitness_tentativa = (
-                    (robo.recursos_coletados * robo.energia * 10)+  # Pontos por recursos coletados
-                    robo.distancia_percorrida * 15 -  # Pontos por distância percorrida
-                    robo.colisoes * 2  # Penalidade por colisões
-                    # (100 - robo.energia) * 0.4  # Penalidade por consumo de energia
+                    (robo.recursos_coletados * 20 + robo.energia * 2) +  # Pontos por recursos coletados
+                    (robo.distancia_percorrida * 2) -  # Pontos por distância percorrida
+                    (robo.colisoes * 10) # Penalidade por colisões
                 )
-                
-                # Adicionar pontos extras por atingir a meta
-                if robo.meta_atingida and len(ambiente.recursos) == 0:
-                    fitness_tentativa += 1000 # Pontos extras por atingir a meta
-            
 
-                # fitness_tentativa -= robo.tempo_parado * 2 # Penalidade por tempo parado
+                # Adicionar pontos extras por atingir a meta
+                if robo.meta_atingida:
+                    fitness_tentativa += 50 # Pontos extras por atingir a meta
+
+                # Penalidade se o robô ficou parado por muito tempo (promover movimento)
+                fitness_tentativa -= robo.tempo_parado * 5
 
                 fitness += max(0, fitness_tentativa)
             
-            individuo.fitness = fitness / 5  # Média das 5 tentativas
+            individuo.fitness = fitness / tentativas  # Média das 5 tentativas
             
             # Atualizar melhor indivíduo
             if individuo.fitness > self.melhor_fitness:
@@ -813,8 +795,8 @@ if __name__ == "__main__":
     # Criar e treinar o algoritmo genético
     print("Treinando o algoritmo genético...")
     # PARÂMETROS PARA O ALUNO MODIFICAR
-    pg = ProgramacaoGenetica(tamanho_populacao=100, profundidade=7)
-    melhor_individuo, historico = pg.evoluir(n_geracoes=8)
+    pg = ProgramacaoGenetica(tamanho_populacao=70, profundidade=6)
+    melhor_individuo, historico = pg.evoluir(n_geracoes=50)
     
     # Salvar o melhor indivíduo
     print("Salvando o melhor indivíduo...")
