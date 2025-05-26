@@ -761,6 +761,7 @@ class ProgramacaoGenetica:
         self.melhor_individuo = None
         self.melhor_fitness = float('-inf')
         self.historico_fitness = []
+        self.historico_media = []
     
     def avaliar_populacao(self):
         ambiente = Ambiente()
@@ -840,9 +841,15 @@ class ProgramacaoGenetica:
             # Avaliar população
             self.avaliar_populacao()
             
-            # Registrar melhor fitness
+            # Calcular e registrar média
+            media_fitness = sum(ind.fitness for ind in self.populacao) / self.tamanho_populacao
+            
+            # Registrar histórico
             self.historico_fitness.append(self.melhor_fitness)
+            self.historico_media.append(media_fitness)
+            
             print(f"Melhor fitness: {self.melhor_fitness:.2f}")
+            print(f"Média fitness: {media_fitness:.2f}")
             
             # Selecionar indivíduos
             selecionados = self.selecionar()
@@ -862,7 +869,7 @@ class ProgramacaoGenetica:
             
             self.populacao = nova_populacao
         
-        return self.melhor_individuo, self.historico_fitness
+        return self.melhor_individuo, self.historico_fitness, self.historico_media
 
 # =====================================================================
 # PARTE 3: EXECUÇÃO DO PROGRAMA (PARA O ALUNO MODIFICAR)
@@ -880,7 +887,7 @@ if __name__ == "__main__":
         tamanho_populacao=100,  # População maior para mais diversidade
         profundidade=4          # Árvores mais complexas para comportamentos sofisticados
     )
-    melhor_individuo, historico = pg.evoluir(n_geracoes=50)  # Mais gerações para evolução
+    melhor_individuo, historico_fitness, historico_media = pg.evoluir(n_geracoes=50)  # Mais gerações para evolução
     
     # Salvar o melhor indivíduo
     print("Salvando o melhor indivíduo...")
@@ -889,10 +896,13 @@ if __name__ == "__main__":
     # Plotar evolução do fitness
     print("Plotando evolução do fitness...")
     plt.figure(figsize=(10, 5))
-    plt.plot(historico)
+    plt.plot(pg.historico_fitness, 'b-', label='Melhor Fitness')
+    plt.plot(pg.historico_media, 'r-', label='Média da População')
     plt.title('Evolução do Fitness')
     plt.xlabel('Geração')
     plt.ylabel('Fitness')
+    plt.legend()
+    plt.grid(True)
     plt.savefig('evolucao_fitness_robo.png')
     plt.close()
     
