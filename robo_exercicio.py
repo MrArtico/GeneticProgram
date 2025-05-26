@@ -545,26 +545,99 @@ class IndividuoPG:
         if self.profundidade == 0:
             return self.criar_folha()
         
-        # OPERADORES DISPONÍVEIS PARA O ALUNO MODIFICAR
-        operador = random.choice(['+', '-', '*', '/', 'if_positivo', 'if_negativo'])
-
-        esquerda = IndividuoPG(self.profundidade - 1).criar_arvore_aleatoria()
-        direita = IndividuoPG(self.profundidade - 1).criar_arvore_aleatoria()
-
-        return {
-            'tipo': 'operador',
-            'operador': operador,
-            'esquerda': esquerda,
-            'direita': direita
-        }
+        # Operadores especializados para navegação
+        operadores_navegacao = [
+            'desviar_obstaculo',     # Novo: comportamento específico de desvio
+            'buscar_recurso',        # Novo: movimento em direção ao recurso
+            'evitar_borda',          # Novo: manter-se longe das bordas
+            'if_perto_obstaculo',    # Novo: verifica proximidade de obstáculo
+            'if_perto_recurso'       # Novo: verifica proximidade de recurso
+        ]
+        
+        operadores_basicos = ['+', '-', '*', '/', 'max', 'min']
+        
+        # Escolha baseada na profundidade
+        if self.profundidade > 2:
+            operador = random.choice(operadores_navegacao + operadores_basicos)
+        else:
+            operador = random.choice(operadores_navegacao)  # Prioriza navegação
+        
+        # Criar sub-árvores especializadas baseadas no operador
+        if operador == 'desviar_obstaculo':
+            return {
+                'tipo': 'operador',
+                'operador': 'if_positivo',
+                'esquerda': {
+                    'tipo': 'operador',
+                    'operador': '-',
+                    'esquerda': {'tipo': 'folha', 'valor': 100},
+                    'direita': {'tipo': 'folha', 'variavel': 'dist_obstaculo'}
+                },
+                'direita': {
+                    'tipo': 'operador',
+                    'operador': '*',
+                    'esquerda': {'tipo': 'folha', 'valor': -0.5},
+                    'direita': {'tipo': 'folha', 'variavel': 'angulo_recurso'}
+                }
+            }
+        elif operador == 'buscar_recurso':
+            return {
+                'tipo': 'operador',
+                'operador': '*',
+                'esquerda': {'tipo': 'folha', 'valor': 0.5},
+                'direita': {'tipo': 'folha', 'variavel': 'angulo_recurso'}
+            }
+        elif operador == 'evitar_borda':
+            return {
+                'tipo': 'operador',
+                'operador': 'if_positivo',
+                'esquerda': {
+                    'tipo': 'operador',
+                    'operador': '-',
+                    'esquerda': {'tipo': 'folha', 'valor': 50},
+                    'direita': {'tipo': 'folha', 'variavel': 'dist_obstaculo'}
+                },
+                'direita': {
+                    'tipo': 'operador',
+                    'operador': '*',
+                    'esquerda': {'tipo': 'folha', 'valor': -1},
+                    'direita': {'tipo': 'folha', 'variavel': 'velocidade'}
+                }
+            }
+        else:
+            esquerda = IndividuoPG(self.profundidade - 1).criar_arvore_aleatoria()
+            direita = IndividuoPG(self.profundidade - 1).criar_arvore_aleatoria()
+            return {
+                'tipo': 'operador',
+                'operador': operador,
+                'esquerda': esquerda,
+                'direita': direita
+            }
     
     def criar_folha(self):
-        # VARIÁVEIS DISPONÍVEIS PARA O ALUNO MODIFICAR
-        tipo = random.choice(['constante', 'dist_recurso', 'dist_obstaculo', 'dist_meta', 'angulo_recurso', 'angulo_meta', 'energia', 'velocidade', 'meta_atingida'])
+        # Lista ponderada de variáveis - repetições indicam maior probabilidade de seleção
+        variaveis = [
+            'dist_obstaculo', 'dist_obstaculo', 'dist_obstaculo',  # 3x - Prioridade máxima
+            'dist_recurso', 'dist_recurso',                        # 2x - Segunda prioridade
+            'angulo_recurso', 'angulo_recurso',                    # 2x - Navegação importante
+            'dist_meta', 'dist_meta',                              # 2x - Objetivo final
+            'energia', 'velocidade',                               # 1x - Controle básico
+            'constante'                                            # 1x - Valores fixos
+        ]
+        
+        tipo = random.choice(variaveis)
+        
         if tipo == 'constante':
+            # Valores discretos mais apropriados para navegação
             return {
                 'tipo': 'folha',
-                'valor': random.uniform(-3, 3)  # VALOR ALEATÓRIO PARA O ALUNO MODIFICAR
+                'valor': random.choice([
+                    -1.0,  # Movimento completo para trás/esquerda
+                    -0.5,  # Movimento parcial para trás/esquerda
+                    0.0,   # Parado
+                    0.5,   # Movimento parcial para frente/direita
+                    1.0    # Movimento completo para frente/direita
+                ])
             }
         else:
             return {
@@ -586,36 +659,42 @@ class IndividuoPG:
             elif 'variavel' in no:
                 return sensores[no['variavel']]
         
-        if no['operador'] == 'abs':
-            return abs(self.avaliar_no(no['esquerda'], sensores))
-        elif no['operador'] == 'if_positivo':
-            valor = self.avaliar_no(no['esquerda'], sensores)
-            if valor > 0:
-                return self.avaliar_no(no['direita'], sensores)
-            else:
+        try:
+            esquerda = self.avaliar_no(no['esquerda'], sensores)
+            direita = self.avaliar_no(no['direita'], sensores) if no['direita'] is not None else 0
+            
+            # Proteção contra NaN/Inf
+            if np.isnan(esquerda) or np.isinf(esquerda): esquerda = 0
+            if np.isnan(direita) or np.isinf(direita): direita = 0
+            
+            if no['operador'] == 'desviar_obstaculo':
+                dist = sensores['dist_obstaculo']
+                if dist < 100:  # Distância de segurança
+                    return -1.0 * (100 - dist) / 100  # Força do desvio proporcional à proximidade
                 return 0
-        elif no['operador'] == 'if_negativo':
-            valor = self.avaliar_no(no['esquerda'], sensores)
-            if valor < 0:
-                return self.avaliar_no(no['direita'], sensores)
-            else:
+            
+            elif no['operador'] == 'buscar_recurso':
+                dist = sensores['dist_recurso']
+                angulo = sensores['angulo_recurso']
+                return 0.5 * angulo * (1 - dist/500)  # Ajuste suave baseado na distância
+            
+            elif no['operador'] == 'evitar_borda':
+                if sensores['dist_obstaculo'] < 50:  # Próximo à borda
+                    return -0.5  # Movimento suave para trás
                 return 0
-        
-        esquerda = self.avaliar_no(no['esquerda'], sensores)
-        direita = self.avaliar_no(no['direita'], sensores) if no['direita'] is not None else 0
-        
-        if no['operador'] == '+':
-            return esquerda + direita
-        elif no['operador'] == '-':
-            return esquerda - direita
-        elif no['operador'] == '*':
-            return esquerda * direita
-        elif no['operador'] == '/':
-            return esquerda / direita if direita != 0 else 0
-        elif no['operador'] == 'max':
-            return max(esquerda, direita)
-        else:  # min
-            return min(esquerda, direita)
+            
+            # Operadores básicos com proteção
+            if no['operador'] == '+': return esquerda + direita
+            elif no['operador'] == '-': return esquerda - direita
+            elif no['operador'] == '*': return esquerda * direita
+            elif no['operador'] == '/': return esquerda / direita if abs(direita) > 0.0001 else 0
+            elif no['operador'] == 'max': return max(esquerda, direita)
+            elif no['operador'] == 'min': return min(esquerda, direita)
+            
+            # Limitar resultado final
+            return max(-1.0, min(1.0, esquerda + direita))
+        except:
+            return 0
     
     def mutacao(self, probabilidade=0.1):
         # PROBABILIDADE DE MUTAÇÃO PARA O ALUNO MODIFICAR
@@ -689,9 +768,9 @@ class ProgramacaoGenetica:
         
         for individuo in self.populacao:
             fitness = 0
-            tentativas = 10
+            tentativas = 2
             
-            # Simular 5 tentativas
+            # Simular 2 tentativas
             for _ in range(tentativas):
                 ambiente.reset()
                 robo.reset(ambiente.largura // 2, ambiente.altura // 2)
@@ -714,24 +793,17 @@ class ProgramacaoGenetica:
                     # Verificar fim da simulação
                     if sem_energia or ambiente.passo():
                         break
-                
-                # Calcular fitness
-                fitness_tentativa = (
-                    (robo.recursos_coletados * 20 + robo.energia * 2) +  # Pontos por recursos coletados
-                    (robo.distancia_percorrida * 2) -  # Pontos por distância percorrida
-                    (robo.colisoes * 10) # Penalidade por colisões
-                )
-
-                # Adicionar pontos extras por atingir a meta
-                if robo.meta_atingida:
-                    fitness_tentativa += 50 # Pontos extras por atingir a meta
-
-                # Penalidade se o robô ficou parado por muito tempo (promover movimento)
-                fitness_tentativa -= robo.tempo_parado * 5
-
-                fitness += max(0, fitness_tentativa)
             
-            individuo.fitness = fitness / tentativas  # Média das 5 tentativas
+                # Cálculo de fitness balanceado
+                fitness_tentativa = 0
+                fitness_tentativa += robo.recursos_coletados * 100
+                fitness_tentativa += 150 if robo.meta_atingida else 0
+                fitness_tentativa -= robo.colisoes * 20
+                fitness_tentativa = max(0, fitness_tentativa)
+
+                fitness += fitness_tentativa;
+            
+            individuo.fitness = fitness / tentativas  # Média das 2 tentativas
             
             # Atualizar melhor indivíduo
             if individuo.fitness > self.melhor_fitness:
@@ -739,16 +811,25 @@ class ProgramacaoGenetica:
                 self.melhor_individuo = individuo
     
     def selecionar(self):
-        # MÉTODO DE SELEÇÃO PARA O ALUNO MODIFICAR
-        # Seleção por torneio
-        tamanho_torneio = 10  # TAMANHO DO TORNEIO PARA O ALUNO MODIFICAR
-        selecionados = []
-        
-        for _ in range(self.tamanho_populacao):
+        tamanho_torneio = 5
+        elite_percentual = 0.1  # 10% da população são elite garantida
+        num_elite = max(1, int(self.tamanho_populacao * elite_percentual))
+
+        # Ordena população do melhor para pior
+        ordenados = sorted(self.populacao, key=lambda x: x.fitness, reverse=True)
+
+        # Seleciona os melhores diretamente (elitismo)
+        selecionados = ordenados[:num_elite]
+
+        # Preenche o restante com torneios
+        while len(selecionados) < self.tamanho_populacao:
             torneio = random.sample(self.populacao, tamanho_torneio)
-            vencedor = max(torneio, key=lambda x: x.fitness)
-            selecionados.append(vencedor)
-        
+
+            # Chance de 80% pegar o melhor, 20% pegar o segundo melhor (diversidade)
+            torneio = sorted(torneio, key=lambda x: x.fitness, reverse=True)
+            escolhido = torneio[0] if random.random() < 0.8 else torneio[1]
+            selecionados.append(escolhido)
+
         return selecionados
     
     def evoluir(self, n_geracoes=50):
@@ -795,8 +876,11 @@ if __name__ == "__main__":
     # Criar e treinar o algoritmo genético
     print("Treinando o algoritmo genético...")
     # PARÂMETROS PARA O ALUNO MODIFICAR
-    pg = ProgramacaoGenetica(tamanho_populacao=70, profundidade=6)
-    melhor_individuo, historico = pg.evoluir(n_geracoes=50)
+    pg = ProgramacaoGenetica(
+        tamanho_populacao=100,  # População maior para mais diversidade
+        profundidade=4          # Árvores mais complexas para comportamentos sofisticados
+    )
+    melhor_individuo, historico = pg.evoluir(n_geracoes=50)  # Mais gerações para evolução
     
     # Salvar o melhor indivíduo
     print("Salvando o melhor indivíduo...")
